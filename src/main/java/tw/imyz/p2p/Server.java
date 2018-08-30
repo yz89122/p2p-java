@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-public class P2PServer {
+public class Server {
 
     private static final int DEFAULT_LISTEN_PORT = 5555;
     private static final long DEFAULT_PEER_TIMEOUT = 5000;
@@ -25,8 +25,8 @@ public class P2PServer {
             try {
                 listening_port = Integer.valueOf(args[0]);
             } catch (Exception e) {
-                System.err.println("run with command 'java P2PServer [listening_port [timeout]]'");
-                System.err.println("or prefix 'java -jar P2PServer.jar' if you're using jar file");
+                System.err.println("run with command 'java Server [listening_port [timeout]]'");
+                System.err.println("or prefix 'java -jar Server.jar' if you're using jar file");
                 System.err.println("default listening_port is " + DEFAULT_LISTEN_PORT);
                 e.printStackTrace();
                 System.exit(-1);
@@ -37,23 +37,23 @@ public class P2PServer {
             try {
                 timeout = Integer.valueOf(args[1]);
             } catch (Exception e) {
-                System.err.println("run with command 'java P2PServer [listening_port [timeout]]'");
-                System.err.println("or prefix 'java -jar P2PServer.jar' if you're using jar file");
+                System.err.println("run with command 'java Server [listening_port [timeout]]'");
+                System.err.println("or prefix 'java -jar Server.jar' if you're using jar file");
                 System.err.println("default timeout is " + DEFAULT_PEER_TIMEOUT);
                 e.printStackTrace();
                 System.exit(-1);
             }
         }
 
-		P2PServer server = new P2PServer(listening_port, timeout);
+		Server server = new Server(listening_port, timeout);
 		server.run(); 
 	}
 
 //    private final int listening_port;
     private final long peer_timeout;
-	private final Map<String, Map<Peer, Long>> groups = new HashMap<>();
+	private final Map<String, Map<DestInfo, Long>> groups = new HashMap<>();
 
-    public P2PServer(int listening_port, long peer_timeout) {
+    public Server(int listening_port, long peer_timeout) {
 //		this.listening_port = listening_port;
 		// in order to suppress warning :C
         this.peer_timeout = peer_timeout;
@@ -77,9 +77,9 @@ public class P2PServer {
 	public void run() {
 
 	    if (this.socket != null) {
-            Thread thread_receive_request = new Thread(P2PServer.this::receive_request);
-            Thread thread_sending_packet = new Thread(P2PServer.this::send_notifications);
-            Thread thread_update_peers_info = new Thread(P2PServer.this::update_peers_info);
+            Thread thread_receive_request = new Thread(Server.this::receive_request);
+            Thread thread_sending_packet = new Thread(Server.this::send_notifications);
+            Thread thread_update_peers_info = new Thread(Server.this::update_peers_info);
 
             thread_receive_request.setName("receive_request");
             thread_sending_packet.setName("sending_packet");
@@ -108,14 +108,14 @@ public class P2PServer {
                 // record timestamp
                 long timestamp = System.currentTimeMillis();
                 // record peer info
-                Peer peer = new Peer(this.packet.getAddress(), this.packet.getPort());
+                DestInfo peer = new DestInfo(this.packet.getAddress(), this.packet.getPort());
                 // translate bytes to string
                 String group_key =
                         new String(this.packet.getData(), 0, this.packet.getLength(), StandardCharsets.UTF_8);
                 // synchronize before operations
                 synchronized (this.groups) {
                     // add to group or create a new group
-                    Map<Peer, Long> map = this.groups.get(group_key);
+                    Map<DestInfo, Long> map = this.groups.get(group_key);
                     // if the group doesn't exist
                     if (map != null) {
                         if (map.containsKey(peer)) {
@@ -153,10 +153,10 @@ public class P2PServer {
 
     @SuppressWarnings("unchecked")
     private JSONArray get_peers_JSON(String group_id) {
-        Map<Peer, Long> peers = this.groups.get(group_id);
+        Map<DestInfo, Long> peers = this.groups.get(group_id);
         JSONArray peer_list = new JSONArray();
-        for (Map.Entry<Peer, Long> peer_info : peers.entrySet()) {
-            Peer peer = peer_info.getKey();
+        for (Map.Entry<DestInfo, Long> peer_info : peers.entrySet()) {
+            DestInfo peer = peer_info.getKey();
             JSONObject json_peer_info = new JSONObject();
             json_peer_info.put("address", peer.address.getHostAddress());
             json_peer_info.put("port", peer.port);
@@ -170,10 +170,10 @@ public class P2PServer {
 	    while (!this.socket.isClosed()) {
 	        synchronized (this.groups) {
 	            Set<String> group_remove_list = new HashSet<>();
-                for (Map.Entry<String, Map<Peer, Long>> entry : this.groups.entrySet()) {
+                for (Map.Entry<String, Map<DestInfo, Long>> entry : this.groups.entrySet()) {
                     boolean at_least_one = false;
                     String group_id = entry.getKey();
-                    Map<Peer, Long> peers = entry.getValue();
+                    Map<DestInfo, Long> peers = entry.getValue();
                     // remove timeout peer
                     long current = System.currentTimeMillis();
                     peers.entrySet().removeIf(e -> {
@@ -192,9 +192,9 @@ public class P2PServer {
                     // to raw data
                     byte[] data = group_info.toJSONString().getBytes(StandardCharsets.UTF_8);
                     // sending group info to peers
-                    for (Map.Entry<Peer, Long> peer_info : peers.entrySet()) {
+                    for (Map.Entry<DestInfo, Long> peer_info : peers.entrySet()) {
                         at_least_one = true;
-                        Peer peer = peer_info.getKey();
+                        DestInfo peer = peer_info.getKey();
                         DatagramPacket packet = new DatagramPacket(data, data.length, peer.address, peer.port);
                         this.sending_queue.add(packet);
                     }
