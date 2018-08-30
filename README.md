@@ -9,8 +9,10 @@ A P2P example made with Java DatagramSocket, uses a extra server for UDP hole pu
 run with command
 
 ```
-java Peer <Server>
+java Peer <Server>[:port] [group_id]
 ```
+
+the default `group_id` is `default`
 
 ### Example
 
