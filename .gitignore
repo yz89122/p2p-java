@@ -2,7 +2,5 @@
 out
 gradle
 .gradle
-gradlew
-gradlew.bat
 p2p-java.properties
 p2p-java.xml
