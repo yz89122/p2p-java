@@ -1,10 +1,14 @@
 # Intro
 
-A P2P example made with Java DatagramSocket, uses a extra server for UDP hole punching.
+A P2P example made with Java DatagramSocket.
 
-## What is hole punching?
+## How it works?
 
-It's a technique allows two peers communicate directly if they're under different NATs(different local area networks).
+It uses a third party to tell peers what their public IP and port is(which is used for send message to the Server), then the peers will try to connect to each other.
+
+And this technique is so called 'hole punching'.
+
+It's not 100% works, depends on the NAT types.
 
 # How to build?
 
@@ -26,17 +30,17 @@ gradlew.bat build
 
 ## Peer
 
-run with command
+Run with command.
 
 ```
 java -jar Peer.jar <Server>[:port] [group_id]
 ```
 
-the default `group_id` is `default`
+The default `group_id` is `default`.
 
 ### Example
 
-if the server address is `hello.noip.me`
+If the server address is `hello.noip.me`.
 
 ```
 java -jar Peer.jar hello.noip.me
@@ -44,7 +48,7 @@ java -jar Peer.jar hello.noip.me
 
 ## Server
 
-the default listening port is `5555`
+The default listening port is `5555`.
 
 ```
 java -jar Server.jar [listening_port]
@@ -56,3 +60,22 @@ java -jar Server.jar [listening_port]
 java -jar Server.jar
 ```
 
+# How to know is it works?
+
+If successfully receive message from server, it'll output something like
+
+```
+Server '{"group_id":"default","peers":[{"address":"1.2.3.4","port":56789}]}'
+```
+
+or more peers connected to the same server and use same `group_id`
+
+```
+Server '{"group_id":"default","peers":[{"address":"1.2.3.4","port":56789},{"address":"5.6.7.8","port":56790}]}'
+```
+
+If successfully message from other peers, it'll output something like
+
+```
+1.2.3.4:56789 'Hi! I'm musing_lalande'
+```
