@@ -35,6 +35,9 @@ jar {
 }
 
 task buildPeer(type: Jar) {
+    description = "build Peer.jar"
+    group = "Build"
+
     baseName = "Peer"
     manifest {
         attributes 'Implementation-Version': '1.0'
@@ -47,6 +50,9 @@ task buildPeer(type: Jar) {
 }
 
 task buildServer(type: Jar) {
+    description = "build Server.jar"
+    group = "Build"
+
     baseName = "Server"
     manifest {
         attributes 'Implementation-Version': '1.0'
@@ -57,3 +63,4 @@ task buildServer(type: Jar) {
     from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
     destinationDir = file("$rootDir/build/jar")
 }
+
