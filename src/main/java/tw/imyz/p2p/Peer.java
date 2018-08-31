@@ -84,7 +84,7 @@ public class Peer {
                 String msg = new String(
                         this.packet.getData(), 0, this.packet.getLength(), StandardCharsets.UTF_8);
                 if (this.packet.getAddress().equals(this.server_address) && this.packet.getPort() == this.server_port) {
-                    System.out.println("Server:" + ":" + this.packet.getPort() + " '" + msg + "'");
+                    System.out.println("Server: '" + msg + "'");
                     JSONObject group_info = (JSONObject) (new JSONParser()).parse(msg);
                     JSONArray json_peers = (JSONArray) group_info.get("peers");
                     DestInfo[] peers = new DestInfo[json_peers.size()];
