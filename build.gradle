@@ -2,8 +2,6 @@ plugins {
     id 'java'
 }
 
-version '1.0-SNAPSHOT'
-
 sourceCompatibility = 1.8
 
 repositories {
@@ -37,7 +35,7 @@ jar {
 }
 
 task buildPeer(type: Jar) {
-    archiveName = "Peer"
+    baseName = "Peer"
     manifest {
         attributes 'Implementation-Version': '1.0'
         attributes 'Main-Class': 'tw.imyz.p2p.Peer'
@@ -45,10 +43,11 @@ task buildPeer(type: Jar) {
     from sourceSets.main.output
     configurations { all*.exclude module: 'junit' }
     from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    destinationDir = file("$rootDir/build/jar")
 }
 
 task buildServer(type: Jar) {
-    archiveName = "Server"
+    baseName = "Server"
     manifest {
         attributes 'Implementation-Version': '1.0'
         attributes 'Main-Class': 'tw.imyz.p2p.Server'
@@ -56,4 +55,5 @@ task buildServer(type: Jar) {
     from sourceSets.main.output
     configurations { all*.exclude module: 'junit' }
     from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    destinationDir = file("$rootDir/build/jar")
 }
