@@ -26,6 +26,10 @@ gradlew.bat build
 
 (Actually, I'm not sure about this, cause my laptop is running Linux :D. I like Linux, BTW.)
 
+## Lazy to build?
+
+You can download Jars from [here](https://github.com/yanzhen0610/p2p-java/releases)
+
 # Run
 
 ## Peer
