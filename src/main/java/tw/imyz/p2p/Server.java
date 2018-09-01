@@ -2,13 +2,12 @@ package tw.imyz.p2p;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.ParseException;
+import tw.imyz.util.JSON;
 
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -51,7 +50,7 @@ public class Server {
 
 //    private final int listening_port;
     private final long peer_timeout;
-	private final Map<String, Map<DestInfo, Long>> groups = new HashMap<>();
+	private final Map<String, Map<PeerInfo, Long>> groups = new HashMap<>();
 
     public Server(int listening_port, long peer_timeout) {
 //		this.listening_port = listening_port;
@@ -69,7 +68,7 @@ public class Server {
 		this.sending_queue = new ArrayBlockingQueue<>(1 << 16);
 	}
 
-	private final byte[] buffer = new byte[1024 * 32];
+	private final byte[] buffer = new byte[1 << 16];
     private final DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 	private final DatagramSocket socket;
 	private final BlockingQueue<DatagramPacket> sending_queue;
@@ -77,19 +76,20 @@ public class Server {
 	public void run() {
 
 	    if (this.socket != null) {
-            Thread thread_receive_request = new Thread(Server.this::receive_request);
-            Thread thread_sending_packet = new Thread(Server.this::send_notifications);
+            Thread thread_receiving = new Thread(Server.this::thread_receiving);
+            Thread thread_sending = new Thread(Server.this::thread_sending);
             Thread thread_update_peers_info = new Thread(Server.this::update_peers_info);
 
-            thread_receive_request.setName("receive_request");
-            thread_sending_packet.setName("sending_packet");
+            thread_receiving.setName("thread_receiving");
+            thread_sending.setName("thread_sending");
             thread_update_peers_info.setName("update_peers_info");
-            thread_receive_request.start();
-            thread_sending_packet.start();
+            thread_receiving.start();
+            thread_sending.start();
             thread_update_peers_info.start();
+
             try {
-                thread_receive_request.join();
-                thread_sending_packet.join();
+                thread_receiving.join();
+                thread_sending.join();
                 thread_update_peers_info.join();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -99,7 +99,8 @@ public class Server {
 
 	}
 
-	private void receive_request() {
+	@SuppressWarnings("unchecked")
+	private void thread_receiving() {
 	    while (!this.socket.isClosed()) {
             try {
                 boolean new_peer = true;
@@ -108,14 +109,30 @@ public class Server {
                 // record timestamp
                 long timestamp = System.currentTimeMillis();
                 // record peer info
-                DestInfo peer = new DestInfo(this.packet.getAddress(), this.packet.getPort());
+                PeerInfo peer = new PeerInfo(this.packet.getAddress(), this.packet.getPort());
                 // translate bytes to string
-                String group_key =
+                String message =
                         new String(this.packet.getData(), 0, this.packet.getLength(), StandardCharsets.UTF_8);
+
+                String group_id = message;
+                try {
+                    JSONObject json_object = JSON.parse(message);
+                    group_id = (String) json_object.getOrDefault(Contract.JSON_GROUP_ID, "default");
+                    String peer_id = (String) json_object.get(Contract.JSON_PEER_ID);
+                    peer = new PeerInfo(this.packet.getAddress(), this.packet.getPort(), peer_id);
+                } catch (ParseException e) {
+                    System.err.println(String.format("failed to parse message to JSON from %s:%d",
+                            this.packet.getAddress().getHostAddress(), this.packet.getPort()));
+                    e.printStackTrace();
+                } catch (Exception e) {
+                    System.err.println("Unknown error");
+                    e.printStackTrace();
+                }
+
                 // synchronize before operations
                 synchronized (this.groups) {
                     // add to group or create a new group
-                    Map<DestInfo, Long> map = this.groups.get(group_key);
+                    Map<PeerInfo, Long> map = this.groups.get(group_id);
                     // if the group doesn't exist
                     if (map != null) {
                         if (map.containsKey(peer)) {
@@ -128,23 +145,22 @@ public class Server {
                         map = new HashMap<>();
                         map.put(peer, timestamp);
                         // put group
-                        this.groups.put(group_key, map);
+                        this.groups.put(group_id, map);
                     }
                 }
                 // print
                 if (new_peer) System.out.println(String.format("received group key [%s] from %s:%d",
-                        group_key, peer.address.getHostAddress(), peer.port));
+                        group_id, peer.address.getHostAddress(), peer.port));
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
 
-    private void send_notifications() {
+    private void thread_sending() {
 	    while (!this.socket.isClosed()) {
             try {
-                DatagramPacket packet = sending_queue.take();
-                this.socket.send(packet);
+                this.socket.send(sending_queue.take());
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -152,15 +168,10 @@ public class Server {
     }
 
     @SuppressWarnings("unchecked")
-    private JSONArray get_peers_JSON(String group_id) {
-        Map<DestInfo, Long> peers = this.groups.get(group_id);
+    private static JSONArray get_peers_JSON(Iterable<PeerInfo> peers) {
         JSONArray peer_list = new JSONArray();
-        for (Map.Entry<DestInfo, Long> peer_info : peers.entrySet()) {
-            DestInfo peer = peer_info.getKey();
-            JSONObject json_peer_info = new JSONObject();
-            json_peer_info.put("address", peer.address.getHostAddress());
-            json_peer_info.put("port", peer.port);
-            peer_list.add(json_peer_info);
+        for (PeerInfo peer : peers) {
+            peer_list.add(peer.to_JSON_object());
         }
         return peer_list;
     }
@@ -169,11 +180,10 @@ public class Server {
 	private void update_peers_info() {
 	    while (!this.socket.isClosed()) {
 	        synchronized (this.groups) {
-	            Set<String> group_remove_list = new HashSet<>();
-                for (Map.Entry<String, Map<DestInfo, Long>> entry : this.groups.entrySet()) {
-                    boolean at_least_one = false;
+                for (Map.Entry<String, Map<PeerInfo, Long>> entry : this.groups.entrySet()) {
                     String group_id = entry.getKey();
-                    Map<DestInfo, Long> peers = entry.getValue();
+                    Map<PeerInfo, Long> peers = entry.getValue();
+
                     // remove timeout peer
                     long current = System.currentTimeMillis();
                     peers.entrySet().removeIf(e -> {
@@ -184,27 +194,36 @@ public class Server {
                     });
 
                     JSONObject group_info = new JSONObject();
-                    group_info.put("group_id", group_id);
+                    group_info.put(Contract.JSON_GROUP_ID, group_id);
 
-                    // add peers to JSON
-                    group_info.put("peers", get_peers_JSON(group_id));
+                    Set<PeerInfo> peers_info = new HashSet<>(peers.keySet());
 
-                    // to raw data
-                    byte[] data = group_info.toJSONString().getBytes(StandardCharsets.UTF_8);
                     // sending group info to peers
-                    for (Map.Entry<DestInfo, Long> peer_info : peers.entrySet()) {
-                        at_least_one = true;
-                        DestInfo peer = peer_info.getKey();
+                    for (PeerInfo peer : peers.keySet()) {
+                        // remove the info of the target peer before sending them the group info
+                        // this prevent them from sending message to themselves
+
+                        // remove the target self from the set
+                        peers_info.remove(peer);
+                        // add peers info to JSON object
+                        group_info.put(Contract.JSON_PEERS, get_peers_JSON(peers_info));
+
+                        // to raw data
+                        byte[] data = group_info.toJSONString().getBytes(StandardCharsets.UTF_8);
+
+                        // remove
+                        group_info.remove(Contract.JSON_PEERS);
+                        // add it back
+                        peers_info.add(peer);
+
+                        // make a packet
                         DatagramPacket packet = new DatagramPacket(data, data.length, peer.address, peer.port);
+                        // append the packet to sending queue
                         this.sending_queue.add(packet);
                     }
-                    if (!at_least_one) {
-                        group_remove_list.add(group_id);
-                    }
                 }
-                for (String group : group_remove_list) {
-                    this.groups.remove(group);
-                }
+                // remove the group if the group is empty
+                this.groups.entrySet().removeIf(group -> group.getValue().isEmpty());
             }
             try { Thread.sleep(500); } catch (Exception ignore) { }
         }
