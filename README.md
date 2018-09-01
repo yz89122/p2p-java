@@ -66,16 +66,16 @@ java -jar Server.jar
 
 # How to know is it works?
 
-If successfully receive message from server, it'll output something like
+If other peers join the same group
 
 ```
-Server '{"group_id":"default","peers":[{"address":"1.2.3.4","port":56789}]}'
+1.2.3.4:56789 joined
 ```
 
-or more peers connected to the same server and use same `group_id`
+otherwise
 
 ```
-Server '{"group_id":"default","peers":[{"address":"1.2.3.4","port":56789},{"address":"5.6.7.8","port":56790}]}'
+1.2.3.4:56789 left
 ```
 
 If successfully message from other peers, it'll output something like
