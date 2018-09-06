@@ -3,6 +3,7 @@ package tw.imyz.p2p;
 import org.json.simple.JSONObject;
 
 import java.net.InetAddress;
+import java.util.Objects;
 
 public class PeerInfo {
 
@@ -42,10 +43,8 @@ public class PeerInfo {
         if (obj instanceof PeerInfo) {
             PeerInfo other = (PeerInfo) obj;
             return (this.port == other.port) &&
-                    (this.address == other.address ||
-                            (this.address != null && this.address.equals(other.address))) &&
-                    (this.id == other.id || // stupid IntelliJ, id might null
-                            (this.id != null && this.id.equals(other.id)));
+                    Objects.equals(this.address, other.address) &&
+                    Objects.equals(this.id, other.id);
         }
         return false;
     }
